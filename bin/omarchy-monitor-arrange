@@ -1,0 +1,6 @@
+#!/bin/bash
+LIB_DIR="$HOME/.local/lib/omarchy-monitor-arrange"
+exec /usr/bin/python3 -c "
+import sys; sys.path.insert(0, '$LIB_DIR')
+from omarchy_monitor_arrange.__main__ import main; main()
+"
