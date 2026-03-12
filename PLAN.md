@@ -1,6 +1,6 @@
-# Omarchy Monitor Arrangement GUI
+# Omarchy Monitor Arrangement TUI
 
-A macOS-like, keyboard-first visual monitor arrangement tool for Omarchy.
+A terminal-based, keyboard-first visual monitor arrangement tool for Omarchy.
 Lets users see their monitors as rectangles on a 2D canvas and reposition them
 with arrow keys, including diagonal/offset placements. Writes directly to
 `~/.config/hypr/monitors.conf` and Hyprland auto-reloads.
@@ -21,7 +21,7 @@ layer via Python Protocols (structural interfaces).
 6. [Backend Layer](#backend-layer)
 7. [UI Layer](#ui-layer)
 8. [Keyboard Controls](#keyboard-controls)
-9. [GUI Layout](#gui-layout)
+9. [TUI Layout](#tui-layout)
 10. [Hyprland Integration](#hyprland-integration)
 11. [Theming](#theming)
 12. [Deployment and File Locations](#deployment-and-file-locations)
@@ -44,15 +44,15 @@ offsets themselves, accounting for resolution and scale.
 A modular Python application with:
 - A **core** layer managing monitor state, snap logic, and config I/O
 - A **backend** layer abstracting compositor communication (Hyprland today, others later)
-- A **UI** layer that can be swapped (GTK4 today, TUI/Qt/web tomorrow)
+- A **UI** layer that can be swapped (Textual TUI today, Qt/web tomorrow)
 
 ### Design Principles
 
 - **Separation of concerns**: Core knows nothing about UI. UI knows nothing about Hyprland.
 - **Interface-driven**: All layer boundaries use Python Protocols (PEP 544).
 - **Keyboard-first**: Every action has a keyboard shortcut.
-- **Omarchy-native**: Floats as a standard Omarchy floating window. Matches theme.
-- **Zero extra deps**: Uses only python-gobject, gtk4, pycairo (all pre-installed).
+- **Terminal-only**: Runs entirely in the terminal, no mouse required.
+- **Textual-based**: Uses Textual for rendering and input handling.
 
 ---
 
@@ -71,8 +71,8 @@ A modular Python application with:
 │   Backend    │ │   Core    │ │       UI         │
 │  (Protocol)  │ │           │ │    (Protocol)    │
 │              │ │           │ │                  │
-│ - Hyprland   │ │ - Manager │ │ - GTK4 (current) │
-│ - (future:   │ │ - Layout  │ │ - (future: TUI,  │
+│ - Hyprland   │ │ - Manager │ │ - Textual (current) │
+│ - (future:   │ │ - Layout  │ │ - (future: Qt,  │
 │   wlroots,   │ │ - Config  │ │   Qt, web, etc.) │
 │   KDE, etc.) │ │ - Models  │ │                  │
 └──────┬───────┘ └─────┬─────┘ └────────┬─────────┘
@@ -127,11 +127,13 @@ A modular Python application with:
 │       ├── ui/                          # Presentation layer
 │       │   ├── __init__.py
 │       │   ├── base.py                 # MonitorArrangeUI Protocol definition
-│       │   └── gtk4/                   # GTK4 implementation
+│       │   └── textual/                # Textual TUI implementation
 │       │       ├── __init__.py
-│       │       ├── app.py              # Gtk.Application setup, window, key handling
-│       │       ├── canvas.py           # Gtk.DrawingArea + Cairo rendering
-│       │       └── statusbar.py        # Bottom status bar widget
+│       │       ├── app.py              # Textual App, key handling
+│       │       ├── canvas.py           # Character-based canvas rendering
+│       │       ├── geometry.py         # Layout-to-canvas transforms
+│       │       ├── statusbar.py        # Selected monitor + warnings
+│       │       └── shortcuts.py        # Shortcut hint bar
 │       │
 │       └── theme.py                    # Theme color loading (Omarchy-aware)
 │
@@ -477,97 +479,56 @@ Inside `run()`, the UI:
 3. Translates user input into `manager` method calls
 4. Blocks in its event loop until the user closes
 
-### GTK4 Implementation
+### Textual Implementation
 
 #### app.py -- Application Shell
 
 ```python
-class MonitorArrangeApp(Gtk.Application):
-    """GTK4 application. Sets up window, layout, key handling."""
+class MonitorArrangeApp(App):
+    """Textual app. Sets up layout, key handling."""
 
-    APP_ID = "org.omarchy.monitor-arrange"
+    BINDINGS = [
+        ("tab", "select_next", "Next monitor"),
+        ("shift+tab", "select_prev", "Previous monitor"),
+        ("left", "move_left", "Move left"),
+        ("right", "move_right", "Move right"),
+        ("up", "move_up", "Move up"),
+        ("down", "move_down", "Move down"),
+        ("enter", "apply", "Apply"),
+        ("escape", "quit", "Quit"),
+    ]
 
-    def __init__(self, manager: MonitorManager):
-        super().__init__(application_id=self.APP_ID)
-        self._manager = manager
-
-    def do_activate(self):
-        window = Gtk.ApplicationWindow(application=self)
-        window.set_title("Monitor Arrangement")
-        window.set_default_size(875, 600)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._canvas = MonitorCanvas(self._manager)
-        self._statusbar = StatusBar(self._manager)
-
-        box.append(self._canvas)
-        box.append(self._statusbar)
-        window.set_child(box)
-
-        # Key controller
-        key_ctrl = Gtk.EventControllerKey()
-        key_ctrl.connect("key-pressed", self._on_key_pressed)
-        window.add_controller(key_ctrl)
-
-        # Register for manager changes
-        self._manager.on_change(self._on_manager_change)
-
-        window.present()
-
-    def _on_key_pressed(self, ctrl, keyval, keycode, state):
-        """Route all keyboard input to manager actions."""
-        ...
-
-    def _on_manager_change(self):
-        self._canvas.queue_draw()
-        self._statusbar.update()
+    def compose(self):
+        yield MonitorCanvasWidget(self._manager)
+        yield StatusBarWidget(self._manager)
+        yield ShortcutBarWidget()
 ```
 
-#### canvas.py -- 2D Drawing Surface
+#### canvas.py -- Character Canvas
 
 ```python
-class MonitorCanvas(Gtk.DrawingArea):
-    """Cairo-based 2D canvas showing monitor arrangement."""
+class MonitorCanvasWidget(Widget):
+    """Character-based canvas showing monitor arrangement."""
 
-    def __init__(self, manager: MonitorManager):
-        super().__init__()
-        self._manager = manager
-        self.set_vexpand(True)
-        self.set_draw_func(self._draw)
-
-    def _draw(self, area, cr, width, height):
-        """Cairo draw callback. Renders all monitors."""
-        # 1. Fill background
-        # 2. Compute view transform (Hyprland coords → canvas pixels)
-        # 3. Draw grid/reference dots
-        # 4. Draw each monitor rectangle
-        # 5. Highlight selected monitor
-        ...
-
-    def _hypr_to_canvas(self, hx, hy):
-        """Convert Hyprland coords to canvas pixel coords."""
-        ...
-
-    def _canvas_to_hypr(self, cx, cy):
-        """Convert canvas pixel coords to Hyprland coords."""
+    def render(self) -> Text:
+        # 1. Compute view transform (Hyprland coords → terminal cells)
+        # 2. Draw boxes for monitors
+        # 3. Highlight selected monitor
+        # 4. Overlay overlap warnings
         ...
 ```
 
-#### statusbar.py -- Info and Shortcut Legend
+#### statusbar.py / shortcuts.py -- Info and Shortcut Legend
 
 ```python
-class StatusBar(Gtk.Box):
-    """Bottom bar showing selected monitor info and keyboard shortcuts."""
-
-    def __init__(self, manager: MonitorManager):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
-        self._manager = manager
-        # Labels for monitor info, shortcut legend
-        ...
-
-    def update(self):
+class StatusBarWidget(Static):
+    def update_status(self) -> None:
         """Refresh displayed info from manager state."""
         ...
+
+class ShortcutBarWidget(Static):
+    """One-line shortcut hints."""
+    ...
 ```
 
 ---
@@ -613,12 +574,12 @@ Snap-to-edge activates automatically when edges are close.
 
 ---
 
-## GUI Layout
+## TUI Layout
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │                                                      │
-│            2D Canvas (~70% of window)                │
+│            2D Canvas (~70% of terminal)              │
 │                                                      │
 │     ┌──────────────┐  ┌────────────────────┐         │
 │     │              │  │                    │         │
@@ -636,7 +597,7 @@ Snap-to-edge activates automatically when edges are close.
 │ Resolution: 2560x1440  Refresh: 144Hz  Scale: 1x    │
 │ Position: 1280x0  Transform: Normal                  │
 │                                                      │
-│ [Tab] Select  [←→↑↓] Move  [r] Res  [s] Scale      │
+│ [Tab] Select  [Arrows] Move  [r] Res  [s] Scale    │
 │ [f] Refresh  [t] Rotate  [Enter] Apply  [Esc] Close │
 └──────────────────────────────────────────────────────┘
 ```
@@ -723,7 +684,6 @@ All source lives in `~/Documents/omarchy-monitor-arrange/src/`.
 | `~/.local/lib/omarchy-monitor-arrange/` | Python package (copy of `src/omarchy_monitor_arrange/`) |
 | `~/.local/bin/omarchy-monitor-arrange` | Shell launcher |
 | `~/.config/omarchy/extensions/menu.sh` | Menu override |
-| `~/.config/hypr/hyprland.conf` | Window rule |
 
 The shell launcher (`bin/omarchy-monitor-arrange`):
 ```bash
@@ -741,21 +701,20 @@ from omarchy_monitor_arrange.__main__ import main; main()
 |------|-------------|
 | `src/omarchy_monitor_arrange/` | `~/.local/share/omarchy/lib/monitor-arrange/omarchy_monitor_arrange/` |
 | `bin/omarchy-monitor-arrange` | `~/.local/share/omarchy/bin/omarchy-monitor-arrange` |
-| Window rule | `~/.local/share/omarchy/default/hypr/apps/monitor-arrange.conf` |
-| Menu change | `omarchy-menu` line ~233: `open_in_editor` → `omarchy-monitor-arrange` |
+| Menu change | `omarchy-menu` line ~233: `open_in_editor` → terminal launch of `omarchy-monitor-arrange` |
 
 ---
 
 ## Omarchy Menu Integration
 
-### Window Rule
+### Terminal Launch
+
+Because the UI is terminal-based, menu integration should launch a terminal
+emulator that runs `omarchy-monitor-arrange`. For example:
 
 ```
-windowrule = tag +floating-window, match:class org.omarchy.monitor-arrange
+alacritty -e omarchy-monitor-arrange
 ```
-
-This reuses the existing `floating-window` tag which provides float, center,
-and size (875x600).
 
 ### Menu Override (local, via extensions)
 
@@ -863,43 +822,35 @@ show_setup_menu() {
 ### Phase 7: UI Protocol (`ui/base.py`)
 - [ ] `MonitorArrangeUI` Protocol with `run(manager)` method
 
-### Phase 8: GTK4 Canvas (`ui/gtk4/canvas.py`)
-- [ ] `MonitorCanvas(Gtk.DrawingArea)` class
+### Phase 8: Textual Canvas (`ui/textual/canvas.py`)
+- [ ] `MonitorCanvasWidget(Widget)` class
 - [ ] Bounding box calculation for all monitors
-- [ ] View transform: Hyprland coords ↔ canvas coords
-- [ ] `_draw()`: Cairo rendering of all monitors
-- [ ] Rounded rectangle drawing for each monitor
-- [ ] Monitor labels: name, resolution, scale, refresh
-- [ ] Selected monitor highlight (accent border)
-- [ ] Subtle grid dots on canvas background
-- [ ] Snap indicator lines (when snap is active)
-- [ ] Overlap warning overlay (red tint on overlapping area)
-- [ ] Handle canvas resize (recalculate view transform)
+- [ ] View transform: Hyprland coords ↔ terminal cells
+- [ ] `render()` draws monitor boxes, labels, selection
+- [ ] Overlap warning overlay (character fill)
+- [ ] Help overlay rendering
 
-### Phase 9: GTK4 Status Bar (`ui/gtk4/statusbar.py`)
-- [ ] `StatusBar(Gtk.Box)` class
+### Phase 9: Textual Status + Shortcuts (`ui/textual/statusbar.py`, `ui/textual/shortcuts.py`)
+- [ ] `StatusBarWidget(Static)` class
 - [ ] Display: monitor name, resolution, refresh, scale, transform, position
-- [ ] Keyboard shortcut legend (compact, always visible)
 - [ ] Overlap warning indicator
 - [ ] Unsaved changes indicator
-- [ ] `update()` method called on manager change
+- [ ] `ShortcutBarWidget(Static)` with concise key hints
 
-### Phase 10: GTK4 App Shell (`ui/gtk4/app.py`)
-- [ ] `MonitorArrangeApp(Gtk.Application)` with app-id
-- [ ] Window setup: title, default size, layout (canvas + statusbar)
-- [ ] Key controller: `Gtk.EventControllerKey`
+### Phase 10: Textual App Shell (`ui/textual/app.py`)
+- [ ] `MonitorArrangeApp(App)` with key bindings
+- [ ] Layout: canvas + status + shortcuts
 - [ ] Route all keys to manager actions (see keyboard controls table)
 - [ ] Tab / Shift+Tab: selection
 - [ ] Arrows / Shift+Arrows: movement (coarse / fine)
-- [ ] r / s / f / t / m: settings cycling
+- [ ] r / s / f / t: settings cycling
 - [ ] Enter: apply
 - [ ] Escape: close
 - [ ] i: identify
 - [ ] p: primary
 - [ ] h / ?: help overlay
 - [ ] u: undo
-- [ ] Help overlay toggle (draw on canvas or separate widget)
-- [ ] Register `manager.on_change()` to trigger redraws
+- [ ] Register `manager.on_change()` to trigger refresh
 
 ### Phase 11: Theme Loading (`theme.py`)
 - [ ] Read Omarchy theme directory for color values
@@ -913,16 +864,14 @@ show_setup_menu() {
 - [ ] Wire config writer (HyprlandConfigWriter)
 - [ ] Create MonitorManager with all dependencies
 - [ ] Load monitors
-- [ ] Create GTK4 UI and call `run(manager)`
-- [ ] `--ui` flag to select UI implementation (default: gtk4, future: tui)
+- [ ] Create Textual UI and call `run(manager)`
 - [ ] `--identify` flag for quick identify-only mode
 
 ### Phase 13: Local Deployment
 - [ ] Copy package to `~/.local/lib/omarchy-monitor-arrange/`
 - [ ] Install launcher to `~/.local/bin/omarchy-monitor-arrange`
 - [ ] `chmod +x` the launcher
-- [ ] Add window rule to `~/.config/hypr/hyprland.conf`
-- [ ] Update `~/.config/omarchy/extensions/menu.sh`
+- [ ] Update `~/.config/omarchy/extensions/menu.sh` to launch in a terminal
 
 ### Phase 14: Testing
 - [ ] Test with single monitor (eDP-1)
@@ -944,7 +893,6 @@ show_setup_menu() {
 ### Phase 15: Omarchy Contribution Prep
 - [ ] Document contribution path in this plan
 - [ ] Prepare script for `~/.local/share/omarchy/bin/`
-- [ ] Prepare window rule for `~/.local/share/omarchy/default/hypr/apps/`
 - [ ] Prepare menu change for `omarchy-menu`
 - [ ] Write PR description
 
@@ -960,7 +908,7 @@ Step-by-step guide to submit this tool as a PR to `basecamp/omarchy`.
 - Upstream repo: `https://github.com/basecamp/omarchy.git`
 - Default branch: `dev`
 - Omarchy is entirely bash scripts today — no `lib/` directory exists yet
-- Python deps (python-gobject, gtk4, pycairo) are already pre-installed on Omarchy
+- Textual must be available (install via pip as part of deployment)
 
 ### Step 1: Fork and Clone
 
@@ -993,11 +941,13 @@ lib/monitor-arrange/omarchy_monitor_arrange/
 └── ui/
     ├── __init__.py
     ├── base.py
-    └── gtk4/
+    └── textual/
         ├── __init__.py
         ├── app.py
         ├── canvas.py
-        └── statusbar.py
+        ├── geometry.py
+        ├── statusbar.py
+        └── shortcuts.py
 ```
 
 Copy from the development project:
@@ -1025,18 +975,7 @@ from omarchy_monitor_arrange.__main__ import main; main()
 
 Note: uses `$OMARCHY_PATH` (set by Omarchy's boot process) with a sensible fallback.
 
-### Step 4: Add the Hyprland Window Rule
-
-Create `default/hypr/apps/monitor-arrange.conf`:
-
-```
-windowrule = tag +floating-window, match:class org.omarchy.monitor-arrange
-```
-
-This reuses the existing `floating-window` tag from `default/hypr/apps/system.conf`
-which provides `float`, `center`, and `size 875 600`.
-
-### Step 5: Modify the Menu
+### Step 4: Modify the Menu
 
 In `bin/omarchy-menu`, change line 233 from:
 
@@ -1047,22 +986,10 @@ In `bin/omarchy-menu`, change line 233 from:
 to:
 
 ```bash
-  *Monitors*) omarchy-monitor-arrange ;;
+  *Monitors*) alacritty -e omarchy-monitor-arrange ;;
 ```
 
-### Step 6: Add a Migration
-
-Create a migration file in `migrations/` so existing installs pick up the new
-window rule. Use the Omarchy convention (`omarchy-dev-add-migration --no-edit`)
-or manually create a file named after the unix timestamp of the last commit:
-
-```bash
-echo "Add monitor-arrange window rule"
-
-omarchy-refresh-config hypr/apps/monitor-arrange.conf
-```
-
-### Step 7: Add Keybinding
+### Step 5: Add Keybinding
 
 Add a default keybinding for quick access. In the Omarchy PR, suggest this as a
 default binding or include it in the migration. The binding uses `SUPER ALT, M`
@@ -1075,19 +1002,17 @@ bindd = SUPER ALT, M, Monitor Arrangement, exec, omarchy-monitor-arrange
 For the PR, this would go in `config/hypr/bindings.conf` (the default bindings
 file). For local use, add it to `~/.config/hypr/bindings.conf`.
 
-### Step 8: Review boot.sh / install.sh
+### Step 6: Review boot.sh / install.sh
 
 Check that `boot.sh` and `install.sh` handle the new `lib/` directory during
 installation (symlinks or copies to `~/.local/share/omarchy/`). If they only
 handle `bin/`, `config/`, `default/`, and `themes/`, they may need a one-line
 addition to also sync `lib/`.
 
-### Step 9: Commit and Open PR
+### Step 7: Commit and Open PR
 
 ```bash
-git add lib/monitor-arrange/ bin/omarchy-monitor-arrange \
-        default/hypr/apps/monitor-arrange.conf bin/omarchy-menu \
-        migrations/
+git add lib/monitor-arrange/ bin/omarchy-monitor-arrange bin/omarchy-menu
 git commit -m "Add visual monitor arrangement tool"
 git push -u origin monitor-arrange
 gh pr create --base dev --title "Add visual monitor arrangement tool" --body "..."
@@ -1099,7 +1024,7 @@ gh pr create --base dev --title "Add visual monitor arrangement tool" --body "..
 ## Summary
 
 - Adds `omarchy-monitor-arrange`, a macOS-like visual monitor layout tool
-- Replaces manual `monitors.conf` editing with a keyboard-first 2D canvas GUI
+- Replaces manual `monitors.conf` editing with a keyboard-first 2D canvas TUI
 - Writes directly to `~/.config/hypr/monitors.conf`; Hyprland auto-reloads
 
 ## Architecture
@@ -1107,21 +1032,18 @@ gh pr create --base dev --title "Add visual monitor arrangement tool" --body "..
 3-layer design (core / backend / UI) connected via Python Protocols:
 - **Core**: Monitor state, snap-to-edge engine, config I/O (pure logic, no deps)
 - **Backend**: Hyprland communication via hyprctl (swappable for other compositors)
-- **UI**: GTK4 + Cairo canvas (swappable for TUI/Qt/web)
+- **UI**: Textual TUI (swappable for Qt/web)
 
 ## Dependencies
 
-Zero new packages — uses python-gobject, gtk4, and pycairo which are already
-pre-installed on Omarchy.
+Adds a Python dependency on Textual (installed via pip as part of setup).
 
 ## Changes
 
 - `lib/monitor-arrange/` — Python package (new `lib/` directory)
 - `bin/omarchy-monitor-arrange` — Launcher script
-- `default/hypr/apps/monitor-arrange.conf` — Window rule (floating)
-- `bin/omarchy-menu` — Monitors entry now launches the GUI
+- `bin/omarchy-menu` — Monitors entry now launches the TUI in a terminal
 - `config/hypr/bindings.conf` — Default keybinding (SUPER ALT + M)
-- `migrations/` — Refresh window rule for existing installs
 
 ## Keyboard Controls
 
@@ -1135,9 +1057,7 @@ Enter: apply | Escape: close | i: identify | u: undo | h: help
 - [ ] Fork `basecamp/omarchy` and create `monitor-arrange` branch off `dev`
 - [ ] Copy Python package to `lib/monitor-arrange/`
 - [ ] Create `bin/omarchy-monitor-arrange` launcher with `$OMARCHY_PATH`
-- [ ] Create `default/hypr/apps/monitor-arrange.conf` window rule
-- [ ] Update `bin/omarchy-menu` line 233 to launch `omarchy-monitor-arrange`
+- [ ] Update `bin/omarchy-menu` line 233 to launch `omarchy-monitor-arrange` in a terminal
 - [ ] Add keybinding `SUPER ALT + M` to default bindings and locally
-- [ ] Add migration for existing installs
 - [ ] Verify `boot.sh` / `install.sh` handle `lib/` directory
 - [ ] Commit, push, open PR against `dev`
