@@ -24,7 +24,7 @@ def main() -> None:
     from omarchy_monitor_arrange.core.layout import DefaultLayoutEngine
     from omarchy_monitor_arrange.core.manager import MonitorManager
     from omarchy_monitor_arrange.theme import load_colors
-    from omarchy_monitor_arrange.ui.gtk4.app import MonitorArrangeGtkUI
+    from omarchy_monitor_arrange.ui.textual.app import MonitorArrangeTextualUI
 
     backend = HyprlandBackend()
     layout = DefaultLayoutEngine()
@@ -42,7 +42,7 @@ def main() -> None:
         sys.exit(1)
 
     colors = load_colors()
-    ui = MonitorArrangeGtkUI(colors)
+    ui = MonitorArrangeTextualUI(colors)
     ui.run(manager)
 
 
