@@ -1,92 +1,144 @@
-# Omarchy Monitor Arrange
+<p align="center">
+  <img src="./screenshots/svg/main.svg" alt="Omarchy Monitor Arrange" width="700">
+</p>
 
-![Default Image](./screenshots/svg/main.svg)
-A macOS-like, keyboard-first visual monitor arrangement tool for [Omarchy](https://omarchy.com) (Hyprland).  
-Drag monitors as rectangles on a 2D canvas, reposition with arrow keys, and write directly to `~/.config/hypr/monitors.conf`.
+<h1 align="center">Omarchy Monitor Arrange</h1>
+
+<p align="center">
+  <strong>A keyboard-first visual monitor arrangement tool for <a href="https://omarchy.com">Omarchy</a></strong><br>
+  Drag, snap, and configure multi-monitor layouts — right from your terminal.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/hyprland-supported-58E1FF?style=flat-square&logo=wayland&logoColor=white" alt="Hyprland">
+  <img src="https://img.shields.io/badge/ui-textual-00C853?style=flat-square" alt="Textual TUI">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue?style=flat-square" alt="Version 0.1.0">
+</p>
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><strong>Main View</strong></td>
+    <td align="center"><strong>Help Overlay</strong></td>
+  </tr>
+  <tr>
+    <td><img src="./screenshots/svg/main.svg" width="400"></td>
+    <td><img src="./screenshots/svg/help.svg" width="400"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Monitor Selected (eDP-1)</strong></td>
+    <td align="center"><strong>Monitor Selected (DP-2)</strong></td>
+  </tr>
+  <tr>
+    <td><img src="./screenshots/svg/select-edp1.svg" width="400"></td>
+    <td><img src="./screenshots/svg/select-dp2.svg" width="400"></td>
+  </tr>
+</table>
+
+## Features
+
+- **Visual 2D canvas** — see your monitors as proportional rectangles in the terminal
+- **Keyboard-first** — navigate, move, resize, and configure without touching a mouse
+- **Smart snapping** — monitors snap to edges and align automatically
+- **Live config** — writes directly to `~/.config/hypr/monitors.conf` and reloads Hyprland
+- **Undo support** — made a mistake? press `u` to revert
+- **Monitor identify** — flash monitor names on physical displays
 
 ## Requirements
 
-- **Hyprland** (running — uses `hyprctl`)
-- **Python 3.11+**
-- **Textual** (terminal UI library)
+- [Hyprland](https://hyprland.org) (running — uses `hyprctl`)
+- Python 3.11+
 
-Install Textual with pip.
+## Quick Start
 
-## Quick Start (development)
-
-Run directly from the source tree:
+### Install
 
 ```bash
-cd ~/Documents/omarchy-monitor-arrange
-python3 -m pip install -r requirements.txt
-PYTHONPATH=src python3 -m omarchy_monitor_arrange
+git clone https://github.com/omarchy/omarchy-monitor-arrange.git
+cd omarchy-monitor-arrange
+./install.sh
 ```
 
-## Install (local)
-
-Copy the package and launcher into your local paths:
-
-```bash
-# Install library
-mkdir -p ~/.local/lib/omarchy-monitor-arrange
-cp -r src/omarchy_monitor_arrange ~/.local/lib/omarchy-monitor-arrange/
-
-# Install launcher
-cp bin/omarchy-monitor-arrange ~/.local/bin/
-chmod +x ~/.local/bin/omarchy-monitor-arrange
-
-# Add Hyprland window rule (float the app window)
-echo 'windowrule = tag +floating-window, match:class org.omarchy.monitor-arrange' \
-  >> ~/.config/hypr/hyprland.conf
-```
-
-Then run from anywhere:
+Then launch with:
 
 ```bash
 omarchy-monitor-arrange
 ```
 
-## Omarchy Menu Integration
+Or press **Super + Alt + M** (keybinding added automatically).
 
-To add a "Monitors" entry to the Omarchy setup menu, create or edit `~/.config/omarchy/extensions/menu.sh` and override `show_setup_menu()` so the Monitors case launches `omarchy-monitor-arrange` instead of opening the config in an editor. See `PLAN.md` for the full menu override snippet.
+### Uninstall
+
+```bash
+./install.sh --uninstall
+```
+
+### Development
+
+Run directly from the source tree:
+
+```bash
+python3 -m pip install -r requirements.txt
+PYTHONPATH=src python3 -m omarchy_monitor_arrange
+```
 
 ## Keyboard Controls
 
 | Key | Action |
-|-----|--------|
-| Tab / Shift+Tab | Select next / previous monitor |
-| Arrow keys | Move selected monitor (coarse) |
-| Shift + Arrows | Move selected monitor (fine, 1px) |
-| r | Cycle resolution |
-| s | Cycle scale (1 → 1.25 → 1.5 → 1.75 → 2 → 3) |
-| f | Cycle refresh rate |
-| t | Cycle transform (Normal → 90° → 180° → 270°) |
-| p | Set selected as primary |
-| i | Identify — flash name on each physical display |
-| u | Undo last move |
-| Enter | Apply — write config and reload Hyprland |
-| Escape | Close without saving |
-| h / ? | Toggle help overlay |
+|:---|:---|
+| <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> | Select next / previous monitor |
+| <kbd>Arrow keys</kbd> | Move selected monitor (coarse) |
+| <kbd>Shift</kbd> + <kbd>Arrows</kbd> | Move selected monitor (fine, 1 px) |
+| <kbd>r</kbd> | Cycle resolution |
+| <kbd>s</kbd> | Cycle scale (1 &rarr; 1.25 &rarr; 1.5 &rarr; 1.75 &rarr; 2 &rarr; 3) |
+| <kbd>f</kbd> | Cycle refresh rate |
+| <kbd>t</kbd> | Cycle transform (Normal &rarr; 90&deg; &rarr; 180&deg; &rarr; 270&deg;) |
+| <kbd>p</kbd> | Set selected as primary |
+| <kbd>i</kbd> | Identify &mdash; flash name on each physical display |
+| <kbd>u</kbd> | Undo last move |
+| <kbd>Enter</kbd> | Apply &mdash; write config and reload Hyprland |
+| <kbd>Escape</kbd> | Close without saving |
+| <kbd>h</kbd> / <kbd>?</kbd> | Toggle help overlay |
+
+## Architecture
+
+```
+src/omarchy_monitor_arrange/
+├── core/             # Pure logic — models, layout engine, config writer, manager
+│   ├── models.py     # Monitor dataclass, snap/overlap types
+│   ├── layout.py     # Snap-to-edge, overlap detection, gap closing
+│   ├── config.py     # Read/write monitors.conf
+│   └── manager.py    # Orchestrates core operations, undo stack
+├── backends/         # Compositor abstraction (Hyprland today, others later)
+│   ├── base.py       # MonitorBackend protocol
+│   └── hyprland.py   # hyprctl integration
+├── ui/               # Presentation layer
+│   ├── base.py       # MonitorArrangeUI protocol
+│   └── textual/      # Textual TUI implementation
+│       ├── app.py    # Main application
+│       ├── canvas.py # 2D monitor canvas widget
+│       ├── statusbar.py
+│       ├── shortcuts.py
+│       └── geometry.py
+└── theme.py          # Omarchy theme color loading
+```
+
+The architecture is **interface-driven**: core knows nothing about UI, UI knows nothing about Hyprland. All layer boundaries use [Python Protocols](https://peps.python.org/pep-0544/) for clean separation of concerns.
 
 ## Running Tests
 
 ```bash
-cd ~/Documents/omarchy-monitor-arrange
 PYTHONPATH=src python3 -m pytest tests/ -v
 ```
 
-## Project Structure
+## Omarchy Menu Integration
 
-```
-src/omarchy_monitor_arrange/
-├── core/           # Pure logic — models, layout engine, config writer, manager
-├── backends/       # Compositor abstraction (Hyprland today, others later)
-├── ui/             # Presentation layer (Textual TUI)
-└── theme.py        # Omarchy theme color loading
-```
-
-The architecture is interface-driven: core knows nothing about UI, UI knows nothing about Hyprland. All layer boundaries use Python Protocols (PEP 544). See `PLAN.md` for the full design.
+To add a **Monitors** entry to the Omarchy setup menu, create or edit `~/.config/omarchy/extensions/menu.sh` and override `show_setup_menu()` so the Monitors case launches `omarchy-monitor-arrange`. See `PLAN.md` for the full menu override snippet.
 
 ## License
 
-Part of the Omarchy project.
+Part of the [Omarchy](https://omarchy.com) project.
