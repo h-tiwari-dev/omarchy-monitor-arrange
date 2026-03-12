@@ -7,9 +7,9 @@ Drag monitors as rectangles on a 2D canvas, reposition with arrow keys, and writ
 
 - **Hyprland** (running — uses `hyprctl`)
 - **Python 3.11+**
-- **GTK4** + **python-gobject** + **pycairo** (pre-installed on Omarchy)
+- **Textual** (terminal UI library)
 
-No extra pip packages needed.
+Install Textual with pip.
 
 ## Quick Start (development)
 
@@ -17,6 +17,7 @@ Run directly from the source tree:
 
 ```bash
 cd ~/Documents/omarchy-monitor-arrange
+python3 -m pip install -r requirements.txt
 PYTHONPATH=src python3 -m omarchy_monitor_arrange
 ```
 
@@ -79,7 +80,7 @@ PYTHONPATH=src python3 -m pytest tests/ -v
 src/omarchy_monitor_arrange/
 ├── core/           # Pure logic — models, layout engine, config writer, manager
 ├── backends/       # Compositor abstraction (Hyprland today, others later)
-├── ui/             # Presentation layer (GTK4 today, TUI/Qt/web tomorrow)
+├── ui/             # Presentation layer (Textual TUI)
 └── theme.py        # Omarchy theme color loading
 ```
 
