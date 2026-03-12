@@ -1,5 +1,6 @@
 # Omarchy Monitor Arrange
 
+![Default Image](./screenshots/svg/main.svg)
 A macOS-like, keyboard-first visual monitor arrangement tool for [Omarchy](https://omarchy.com) (Hyprland).  
 Drag monitors as rectangles on a 2D canvas, reposition with arrow keys, and write directly to `~/.config/hypr/monitors.conf`.
 
