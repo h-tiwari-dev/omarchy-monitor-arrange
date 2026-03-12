@@ -32,9 +32,9 @@ uninstall() {
   fi
 
   # Remove window rule from hyprland.conf
-  if [[ -f "$HYPR_CONF" ]] && grep -qF 'org.omarchy.monitor-arrange' "$HYPR_CONF"; then
+  if [[ -f "$HYPR_CONF" ]] && grep -qF 'org.omarchy.omarchy-monitor-arrange' "$HYPR_CONF"; then
     echo "  Removing window rule from $HYPR_CONF ..."
-    sed -i '/org\.omarchy\.monitor-arrange/d' "$HYPR_CONF"
+    sed -i '/org\.omarchy\.omarchy-monitor-arrange/d' "$HYPR_CONF"
   fi
 
   # Remove keybinding from bindings.conf
@@ -56,35 +56,44 @@ install() {
   rm -rf "$LIB_DIR/omarchy_monitor_arrange"
   cp -r "$PROJECT_DIR/src/omarchy_monitor_arrange" "$LIB_DIR/"
 
-  # 2. Install launcher
+  # 2. Set up venv and install dependencies
+  VENV_DIR="$LIB_DIR/.venv"
+  if [[ ! -d "$VENV_DIR" ]]; then
+    echo "  Creating virtual environment in $VENV_DIR ..."
+    /usr/bin/python3 -m venv "$VENV_DIR"
+  fi
+  echo "  Installing Python dependencies ..."
+  "$VENV_DIR/bin/pip" install --quiet -r "$PROJECT_DIR/requirements.txt"
+
+  # 3. Install launcher
   echo "  Installing launcher to $LAUNCHER ..."
   mkdir -p "$BIN_DIR"
   cp "$PROJECT_DIR/bin/omarchy-monitor-arrange" "$LAUNCHER"
   chmod +x "$LAUNCHER"
 
-  # 3. Symlink into omarchy bin dir (which is on PATH)
+  # 4. Symlink into omarchy bin dir (which is on PATH)
   if [[ -d "$OMARCHY_BIN" ]]; then
     echo "  Symlinking into $OMARCHY_BIN ..."
     ln -sf "$LAUNCHER" "$OMARCHY_LINK"
   fi
 
-  # 4. Add Hyprland window rule (idempotent)
+  # 5. Add Hyprland window rule (idempotent)
   if [[ -f "$HYPR_CONF" ]]; then
-    if ! grep -qF 'org.omarchy.monitor-arrange' "$HYPR_CONF"; then
+    if ! grep -qF 'org.omarchy.omarchy-monitor-arrange' "$HYPR_CONF"; then
       echo "  Adding window rule to $HYPR_CONF ..."
-      printf '\n%s\n' 'windowrule = tag +floating-window, match:class org.omarchy.monitor-arrange' >> "$HYPR_CONF"
+      printf '\n%s\n' 'windowrule = tag +floating-window, match:class org.omarchy.omarchy-monitor-arrange' >> "$HYPR_CONF"
     else
-      echo "  Window rule already present in $HYPR_CONF"
+      echo "  Window rule already present in $HYPR_CONF (org.omarchy.omarchy-monitor-arrange)"
     fi
   else
     echo "  Skipping window rule ($HYPR_CONF not found)"
   fi
 
-  # 5. Add keybinding SUPER ALT + M (idempotent)
+  # 6. Add keybinding SUPER ALT + M (idempotent)
   if [[ -f "$BINDINGS_CONF" ]]; then
     if ! grep -qF 'omarchy-monitor-arrange' "$BINDINGS_CONF"; then
       echo "  Adding keybinding (SUPER ALT + M) to $BINDINGS_CONF ..."
-      printf '\n%s\n' 'bindd = SUPER ALT, M, Monitor Arrangement, exec, uwsm-app -- omarchy-monitor-arrange' >> "$BINDINGS_CONF"
+      printf '\n%s\n' 'bindd = SUPER ALT, M, Monitor Arrangement, exec, omarchy-launch-or-focus-tui omarchy-monitor-arrange' >> "$BINDINGS_CONF"
     else
       echo "  Keybinding already present in $BINDINGS_CONF"
     fi

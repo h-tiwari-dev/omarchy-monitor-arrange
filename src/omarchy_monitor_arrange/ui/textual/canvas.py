@@ -16,7 +16,7 @@ MIN_BOX_W = 6
 MIN_BOX_H = 4
 
 
-class MonitorCanvasWidget(Widget):
+class MonitorCanvasWidget(Widget, can_focus=True):
     """Character-based canvas that renders monitor arrangement."""
 
     def __init__(self, manager: MonitorManager, colors: dict):
