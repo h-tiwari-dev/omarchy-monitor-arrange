@@ -138,7 +138,3 @@ PYTHONPATH=src python3 -m pytest tests/ -v
 ## Omarchy Menu Integration
 
 To add a **Monitors** entry to the Omarchy setup menu, create or edit `~/.config/omarchy/extensions/menu.sh` and override `show_setup_menu()` so the Monitors case launches `omarchy-monitor-arrange`. See `PLAN.md` for the full menu override snippet.
-
-## License
-
-Part of the [Omarchy](https://omarchy.com) project.
